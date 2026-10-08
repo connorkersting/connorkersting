@@ -1,0 +1,20 @@
+[project]
+name = "connorkersting-profile"
+version = "0.1.0"
+description = "Profile README assets and the monthly live-data pipeline"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

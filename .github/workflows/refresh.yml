@@ -1,0 +1,48 @@
+name: refresh-live-data
+
+# Rebuilds data/ and assets/live-*.svg from Zillow Research once a month.
+# Zillow posts new metro files mid-month; the 20th leaves margin. Any failed check
+# fails the run and nothing is committed, so the last good chart stays up.
+# GitHub pauses cron in public repos after 60 days without activity; if the badge
+# month goes stale, re-enable the workflow or run it by hand (workflow_dispatch).
+on:
+  schedule:
+    - cron: "17 14 20 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-live-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Test on synthetic fixtures
+        run: uv run pytest -q
+
+      - name: Run pipeline
+        run: uv run python -m pipeline.refresh
+
+      - name: Commit if outputs changed
+        run: |
+          git add data assets/live-dark.svg assets/live-light.svg
+          if git diff --cached --quiet; then
+            echo "No change in outputs; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh live data: $(python3 -c 'import json; print(json.load(open("data/badge.json"))["message"])')"
+          git push
