@@ -58,7 +58,9 @@ def load_source(name: str, text: str) -> pd.DataFrame:
     """Parse one Zillow CSV and enforce its contract. Returns a long table."""
     if not text.strip():
         raise PipelineError(f"{name}: file is empty")
-    raw = pd.read_csv(io.StringIO(text), dtype=str)
+    # Only truly empty cells count as missing. pandas' defaults would also turn "N/A", "null",
+    # "NaN" etc. into NaN, which would hide upstream corruption from the value check below.
+    raw = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False, na_values=[""])
     arrived = list(raw.columns[: len(ID_COLUMNS)])
     if arrived != ID_COLUMNS:
         raise PipelineError(f"{name}: id columns changed. expected {ID_COLUMNS}, arrived {arrived}")
@@ -80,15 +82,25 @@ def load_source(name: str, text: str) -> pd.DataFrame:
         if bad.any():
             raise PipelineError(f"{name}: {column} expected integers, arrived {raw.loc[bad, column].iloc[0]!r}")
 
+    melted = raw.loc[raw["RegionType"] == "msa"].melt(id_vars=ID_COLUMNS, var_name="month", value_name="raw")
+    parsed = pd.to_numeric(melted["raw"], errors="coerce")
+    # Empty cells are normal (series start at different dates). A non-empty cell that is not a
+    # positive number is corruption: fail rather than let it fall back to an older month.
+    malformed = melted["raw"].notna() & (parsed.isna() | (parsed <= 0))
+    if malformed.any():
+        row = melted.loc[malformed].iloc[0]
+        raise PipelineError(
+            f"{name}: expected a positive number, arrived {row['raw']!r} for RegionID {row['RegionID']} "
+            f"in {row['month']} ({int(malformed.sum())} malformed cells)"
+        )
     long = (
-        raw.loc[raw["RegionType"] == "msa"]
-        .melt(id_vars=ID_COLUMNS, var_name="month", value_name="value")
-        .assign(
+        melted.assign(
             RegionID=lambda d: d["RegionID"].astype("int64"),
             SizeRank=lambda d: d["SizeRank"].astype("int64"),
             month=lambda d: pd.to_datetime(d["month"]).dt.date,
-            value=lambda d: pd.to_numeric(d["value"], errors="coerce"),
+            value=parsed,
         )
+        .drop(columns="raw")
         .dropna(subset=["value"])
     )
     if long.empty:
@@ -120,6 +132,16 @@ def compute(zhvi: pd.DataFrame, zori: pd.DataFrame, today: date, min_joined: int
 
     year_ago = date(month.year - 1, month.month, 1)
     current = joined.loc[joined["month"] == month]
+    # The chart claims "the N largest metros", so pick them from the home-value file's own
+    # SizeRank and require every one to be present; never let the N+1th quietly fill a gap.
+    largest = (
+        zhvi[["RegionID", "SizeRank", "RegionName"]].drop_duplicates("RegionID").nsmallest(TOP_N, "SizeRank")
+    )
+    missing = largest.loc[~largest["RegionID"].isin(current["RegionID"]), "RegionName"].tolist()
+    if missing:
+        raise PipelineError(f"coverage: the {TOP_N} largest metros must all have both values in {month}; missing {missing}")
+    checks += 1
+    current = current.loc[current["RegionID"].isin(largest["RegionID"])]
     prior = (
         joined.loc[pd.to_datetime(joined["month"]).dt.to_period("M") == pd.Period(year_ago, "M")]
         .assign(price_to_rent_year_ago=lambda d: d["zhvi"] / (12 * d["zori"]))
@@ -139,15 +161,21 @@ def compute(zhvi: pd.DataFrame, zori: pd.DataFrame, today: date, min_joined: int
     if len(table) != TOP_N:
         raise PipelineError(f"compute: expected {TOP_N} metros in the chart, arrived {len(table)}")
     checks += 1
-    lo, hi = RATIO_RANGE
-    out_of_range = table.loc[~table["price_to_rent"].between(lo, hi), ["metro", "price_to_rent"]]
-    if not out_of_range.empty:
-        row = out_of_range.iloc[0]
-        raise PipelineError(
-            f"range: price-to-rent expected between {lo} and {hi}, arrived {row['price_to_rent']:.1f} "
-            f"for {row['metro']}. Likely a unit or join error"
-        )
+    # The legend promises a year-over-year comparison, so every charted metro needs history.
+    no_history = table.loc[table["price_to_rent_year_ago"].isna(), "metro"].tolist()
+    if no_history:
+        raise PipelineError(f"history: no {year_ago:%b %Y} value for {no_history}; the chart compares against it")
     checks += 1
+    lo, hi = RATIO_RANGE
+    for column, label in (("price_to_rent", f"{month:%b %Y}"), ("price_to_rent_year_ago", f"{year_ago:%b %Y}")):
+        out_of_range = table.loc[~table[column].between(lo, hi), ["metro", column]]
+        if not out_of_range.empty:
+            row = out_of_range.iloc[0]
+            raise PipelineError(
+                f"range: {label} price-to-rent expected between {lo} and {hi}, arrived {row[column]:.1f} "
+                f"for {row['metro']}. Likely a unit or join error"
+            )
+        checks += 1
     if table[["zhvi", "zori", "price_to_rent"]].isna().any().any():
         raise PipelineError("compute: nulls arrived in zhvi, zori or price_to_rent for charted metros")
     checks += 1
@@ -199,8 +227,8 @@ def run(root: Path, today: date, texts: dict[str, str] | None = None, min_joined
     texts = texts or {name: fetch(url) for name, url in SOURCES.items()}
     frames = {name: load_source(name, text) for name, text in texts.items()}
     # Per source: non-empty, id columns, month columns, at least one month, unique RegionID,
-    # integer ids (RegionID + SizeRank counted once), metro rows present.
-    source_checks = 7 * len(frames)
+    # integer ids (RegionID + SizeRank counted once), well-formed positive values, metro rows present.
+    source_checks = 8 * len(frames)
     result = compute(frames["zhvi"], frames["zori"], today, min_joined)
     write_outputs(result, root, source_checks)
     return result
