@@ -14,6 +14,18 @@ Across six down-payment and rent definitions, buying beats renting in anywhere f
 **[Rocky Top Outfitters data pipeline](https://github.com/AkyuzBurhan/rocky-top-data-pipeline)** · team of 4 · Python, SQLite, GitHub Actions, Streamlit<br>
 A scheduled job pulled in 53 days of daily files. My part was the analysis and verification. On rainy days pickup share rose from 17.9% to 21.6% (z = 2.76), while the revenue effect was null, and we reported it that way. I also wrote a poison-fixture test that checks the quality gate catches a deliberately bad file.
 
+### This profile is a pipeline
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/live-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/live-light.svg">
+  <img alt="Dot chart of price-to-rent ratios for the 20 largest US metros, this year versus last, from Zillow Research data." src="assets/live-dark.svg" width="100%">
+</picture>
+
+[![live data](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconnorkersting%2Fconnorkersting%2Fmain%2Fdata%2Fbadge.json)](https://github.com/connorkersting/connorkersting/actions/workflows/refresh.yml)
+
+The chart above rebuilds itself on the 20th of every month. A GitHub Action pulls Zillow's home-value and rent indexes, checks both files against a pinned schema, and reconciles metro counts across the join. If any check fails, the run stops without committing and the last good chart stays up. The code is in [pipeline/](pipeline/), with tests in [tests/](tests/).
+
 ### How I work
 
 AI-assisted, human-verified. Claude Code and Codex write a lot of my first drafts. I check their work with tests, row-count reconciliation and my own read of the output before anything ships.
