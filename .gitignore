@@ -1,0 +1,6 @@
+# Local-only: source photos, dev preview tooling, resume notes
+input/
+dev/
+preview/
+NEXT.md
+__pycache__/
