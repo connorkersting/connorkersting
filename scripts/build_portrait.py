@@ -48,7 +48,7 @@ FIELDS: list[tuple[str, str]] = [
     ("", "buy vs. rent across 389 US metros"),
     ("method", "AI-assisted, human-verified"),
 ]
-BLOCKS = ["#0e4429", "#006d32", "#26a641", "#39d353"]  # GitHub contribution greens
+BLOCKS = ["#5c2f00", "#a35400", "#e07200", "#ff8200"]  # ramp up to Tennessee Orange
 
 
 @dataclass(frozen=True)
@@ -65,10 +65,12 @@ class Theme:
     invert: bool  # light theme: dark pixels get the dense characters
 
 
-# Restrained palette: neutral ink for the portrait, green only as an accent.
-DARK = Theme("dark", "#0d1117", "#f0f6fc", "#6e7681", "#7ee787", "#79c0ff",
+# Restrained palette: neutral ink for the portrait, Tennessee Orange as the one accent.
+# #FF8200 is 7.6:1 on the dark background; on white it is only 2.5:1, so the light
+# theme uses a burnt orange (#B85A00, 4.7:1) that passes WCAG AA for text.
+DARK = Theme("dark", "#0d1117", "#f0f6fc", "#6e7681", "#ff8200", "#8b949e",
              "#8b949e", "#e6edf3", "#f0f6fc", invert=False)
-LIGHT = Theme("light", "#ffffff", "#1f2328", "#818b98", "#1a7f37", "#0969da",
+LIGHT = Theme("light", "#ffffff", "#1f2328", "#818b98", "#b85a00", "#59636e",
               "#59636e", "#1f2328", "#1f2328", invert=True)
 
 
@@ -137,7 +139,7 @@ def build_svg(rows: list[str], t: Theme) -> str:
     # Reveals are short real fades, never zero-length steps (those can stick at 0).
     add(".o{opacity:0;animation:on .3s ease-out forwards}")
     add("@keyframes on{from{opacity:0}to{opacity:1}}")
-    add(f".cur{{fill:{t.accent};opacity:0;animation:bl 1.1s steps(1) infinite}}")
+    add(f".cur{{fill:{t.prompt};opacity:0;animation:bl 1.1s steps(1) infinite}}")
     add("@keyframes bl{0%{opacity:1}50%{opacity:0}}")
     add(f".sw{{opacity:0;animation:sw {reveal_end - ROW_START:.2f}s linear {ROW_START}s 1}}")
     add(f"@keyframes sw{{0%{{opacity:1;transform:translateY(0)}}95%{{opacity:1}}100%{{opacity:0;transform:translateY({ph}px)}}}}")

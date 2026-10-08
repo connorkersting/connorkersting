@@ -1,6 +1,6 @@
 """Render the price-to-rent dumbbell chart as a self-contained SVG (dark or light theme).
 
-Matches the profile's restrained palette: neutral text, one green accent for the current
+Matches the profile's restrained palette: neutral text, one Tennessee Orange accent for the current
 month, a hollow grey ring for the same month a year earlier. The title states the finding.
 """
 from __future__ import annotations
@@ -11,11 +11,12 @@ from xml.sax.saxutils import escape
 
 import pandas as pd
 
+# Tennessee Orange for the current month (#FF8200 on dark; burnt #B85A00 on white for contrast).
 THEMES: dict[str, dict[str, str]] = {
     "dark": {"bg": "#0d1117", "text": "#e6edf3", "muted": "#8b949e", "grid": "#21262d",
-             "line": "#30363d", "now": "#7ee787", "ago": "#6e7681"},
+             "line": "#30363d", "now": "#ff8200", "ago": "#6e7681"},
     "light": {"bg": "#ffffff", "text": "#1f2328", "muted": "#59636e", "grid": "#eaeef2",
-              "line": "#d0d7de", "now": "#1a7f37", "ago": "#818b98"},
+              "line": "#d0d7de", "now": "#b85a00", "ago": "#818b98"},
 }
 WIDTH = 860
 LEFT, RIGHT = 230, 70  # label column and value column
